@@ -54,7 +54,7 @@ def perturb(X, stdev):
 
 	while True:
 		new_X = gen()
-		if np.max(new_X) != 1: return new_X, spder(X)
+		if np.max(new_X) <= 1: return new_X, spder(X)
 
 def Lotka_Volterra(x0, r, a, time, noise=0):
 	def dynamical_system(y,t):
