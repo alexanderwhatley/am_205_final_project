@@ -40,7 +40,6 @@ from sklearn.preprocessing import PolynomialFeatures
 import sparse_identification as sp
 from sparse_identification.utils import derivative as spder
 from sparse_identification.solvers import hard_threshold_lstsq_solve
-from sparse_identification.utils import derivative
 
 #--> Defines various functions used in this script.
 
@@ -52,9 +51,9 @@ def perturb(X, stdev):
             new_X[i] = [(X[i][0]+d1), (X[i][1]+d2), (X[i][2]+d3), (X[i][3]+d4)]
         return new_X
 
-    while True:
-        new_X = gen()
-        if np.max(new_X) <= 1: return new_X, spder(new_X)
+    new_X = gen()
+
+    return new_X, spder(new_X)
 
 def Lotka_Volterra(x0, r, a, time, noise=0):
     def dynamical_system(y,t):
@@ -66,6 +65,7 @@ def Lotka_Volterra(x0, r, a, time, noise=0):
     x = odeint(dynamical_system,x0,time,mxstep=5000000)
     dt = time[1]-time[0]
     xdot = spder(x,dt)
+    if noise == 0: return x, xdot
 
     return perturb(x, noise)
 
@@ -147,54 +147,111 @@ def Identified_Model(y, t, library, estimator) :
 
     return dy
 
+def SINDy(x0, t, X, dX):
+    # ---> Compute the Library of polynomial features.
+    poly_lib = PolynomialFeatures(degree=2, include_bias=True)
+    lib = poly_lib.fit_transform(X)
+    Theta = block_diag(lib, lib, lib, lib)
+    n_lib = poly_lib.n_output_features_
+
+    b = dX.flatten(order='F')
+    A = Theta
+
+    # ---> Specify the user-defined constraints.
+    C, d = constraints(poly_lib)
+
+    # ---> Create a linear regression estimator using sindy and identify the underlying equations.
+    estimator = sp.sindy(l1=0.01, solver='lstsq')
+    estimator.fit(A, b)#, eq=[C, d])
+    coeffs = hard_threshold_lstsq_solve(A, b)
+
+    #--> Simulates the identified model.
+    Y  = odeint(Identified_Model, x0, t, args=(poly_lib, estimator),mxstep=5000000)
+
+    return Y
+
+def plot_results_multi(t, X1, Y1, X2, Y2):
+
+    """
+
+    Function to plot the results. No need to comment.
+
+    """
+
+    fig, ax = plt.subplots( 4 , 2 , sharex = True, figsize=(20,5) )
+
+    def plot_side(j, X, Y):
+        ax[0][j].plot(t  , X[:,0], color='b', label='Full simulation' )
+        ax[0][j].plot(t , Y[:,0], color='r', linestyle='--', label='Identified model')
+        ax[0][j].set_ylabel('x1(t)')
+        ax[0][j].legend(loc='upper center', bbox_to_anchor=(.5, 1.33), ncol=2, frameon=False )
+
+        ax[1][j].plot(t, X[:,1], color='b')
+        ax[1][j].plot(t ,Y[:,1], color='r', ls='--')
+        ax[1][j].set_ylabel('x2(t)')
+
+        ax[2][j].plot(t, X[:,2], color='b')
+        ax[2][j].plot(t ,Y[:,2], color='r', ls='--')
+        ax[2][j].set_ylabel('x3(t)')
+
+        ax[3][j].plot(t, X[:,3], color='b')
+        ax[3][j].plot(t ,Y[:,3], color='r', ls='--')
+        ax[3][j].set_ylabel('x4(t)')
+        ax[3][j].set_xlabel('Time')
+        ax[3][j].set_xlim(0, 200)
+
+    plot_side(0, X1, Y1)
+    plot_side(1, X2, Y2)
+
+    return
+
+def plot_error(t, X1, Y1, X2, Y2):
+    error1 = np.absolute(Y1-X1)
+    error2 = np.absolute(Y2-X2)
+
+    fig, ax = plt.subplots( 4 , 2 , sharex = True, figsize=(20,5) )
+
+    def plot_side(j, Z):
+        ax[0][j].plot(t  , Z[:,0], color='b')
+        ax[0][j].set_ylabel('x1(t) error')
+
+        ax[1][j].plot(t, Z[:,1], color='b')
+        ax[1][j].set_ylabel('x2(t) error')
+
+        ax[2][j].plot(t, Z[:,2], color='b')
+        ax[2][j].set_ylabel('x3(t)')
+
+        ax[3][j].plot(t, Z[:,3], color='b')
+        ax[3][j].set_ylabel('x4(t) error')
+        ax[3][j].set_xlabel('Time')
+        ax[3][j].set_xlim(0, 200)
+
+    plot_side(0, error1)
+    plot_side(1, error2)
+
+    return
+
 if __name__ == '__main__':
 
     #--> Sets the parameters for the Lotka-Volterra system.
     r = np.array([1, 0.72, 1.53, 1.27])
     a = np.array([[1, 1.09, 1.52, 0], 
-                [0, 1, 0.44, 1.36], 
-                [2.33, 0, 1, 0.47], 
-                [1.21, 0.51, 0.35, 1]])
+                  [0, 1, 0.44, 1.36], 
+                  [2.33, 0, 1, 0.47], 
+                  [1.21, 0.51, 0.35, 1]])
 
-    t = np.linspace(0,100,50000)
+    t = np.linspace(0,200,50000)
 
-    noise_level = np.logspace(-5, -1, 50)
-    diff = []
-    for noise in noise_level:
-        print(noise)
-        noise_diff = []
-        for _ in range(5):
-            total = 0
-            x0 = np.random.rand(4) # Initial condition.
-            x, dx = Lotka_Volterra(x0, r, a, t, noise=noise)
+    #--> Run the Lotka-Volterra system to produce the data to be used in the sparse identification.
+    x0 = np.random.rand(4)
+    X1, dX1 = Lotka_Volterra(x0, r, a, t)
+    X2, dX2 = perturb(X1, 0.05)
 
-            # ---> Compute the Library of polynomial features.
-            poly_lib = PolynomialFeatures(degree=2, include_bias=True)
-            lib = poly_lib.fit_transform(x)
-            Theta = block_diag(lib, lib, lib, lib)
-            n_lib = poly_lib.n_output_features_
+    Y1 = SINDy(x0, t, X1, dX1)
+    Y2 = SINDy(x0, t, X2, dX2)
 
-            b = dx.flatten(order='F')
-            A = Theta
+    #--> Plots the results to compare the dynamics of the identified system against the original one.
+    plot_error(t, X1, Y1, X2, Y2)
+    plot_results_multi(t, X1, Y1, X2, Y2)
 
-            # ---> Specify the user-defined constraints.
-            C, d = constraints(poly_lib)
-
-            # ---> Create a linear regression estimator using sindy and identify the underlying equations.
-            estimator = sp.sindy(l1=0.01, solver='lstsq')
-            estimator.fit(A, b)#, eq=[C, d])
-            coeffs = hard_threshold_lstsq_solve(A, b)
-
-            #--> Simulates the identified model.
-            Y  = odeint(Identified_Model, x0, t, args=(poly_lib, estimator),mxstep=5000000)
-
-            inf_norm = np.max(np.abs(Y.T - x.T), axis=1)
-            noise_diff.append(inf_norm)
-        diff.append(np.mean(noise_diff, axis=0))
-
-
-    plt.plot(np.log10(noise_level), np.log10(diff))
-    plt.title('Infinity Norm between Trajectories - $t \in [0, 100]$')
-    plt.xlabel('Log(Noise Level)')
-    plt.ylabel('Log(Infinity Norm)')
     plt.show()
