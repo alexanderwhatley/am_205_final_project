@@ -45,16 +45,9 @@ from sparse_identification.utils import derivative
 #--> Defines various functions used in this script.
 
 def perturb(X, stdev):
-    def gen():
-        new_X = np.zeros(np.shape(X))
-        for i in range(len(new_X)):
-            (d1, d2, d3, d4) = np.random.normal(0, stdev, 4)
-            new_X[i] = [(X[i][0]+d1), (X[i][1]+d2), (X[i][2]+d3), (X[i][3]+d4)]
-        return new_X
-
-    while True:
-        new_X = gen()
-        if np.max(new_X) <= 1: return new_X, spder(new_X)
+    if stdev == 0: return X, spder(X)
+    new_X = X + np.random.normal(0, stdev, np.shape(X))
+    return new_X, spder(new_X)
 
 def Lotka_Volterra(x0, r, a, time, noise=0):
     def dynamical_system(y,t):
@@ -147,7 +140,7 @@ def Identified_Model(y, t, library, estimator) :
 
     return dy
 
-if __name__ == '__main__':
+def main(time_range):
 
     #--> Sets the parameters for the Lotka-Volterra system.
     r = np.array([1, 0.72, 1.53, 1.27])
@@ -156,7 +149,7 @@ if __name__ == '__main__':
                 [2.33, 0, 1, 0.47], 
                 [1.21, 0.51, 0.35, 1]])
 
-    t = np.linspace(0,100,50000)
+    t = np.linspace(0,time_range,50000)
 
     noise_level = np.logspace(-5, -1, 50)
     diff = []
@@ -194,7 +187,11 @@ if __name__ == '__main__':
 
 
     plt.plot(np.log10(noise_level), np.log10(diff))
-    plt.title('Infinity Norm between Trajectories - $t \in [0, 100]$')
+    plt.title('Infinity Norm between Trajectories - $t \in [0, {}]$'.format(time_range))
     plt.xlabel('Log(Noise Level)')
     plt.ylabel('Log(Infinity Norm)')
+    plt.savefig('31_c{}'.format(time_range))
     plt.show()
+
+main(5)
+main(20)
