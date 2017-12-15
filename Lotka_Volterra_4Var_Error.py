@@ -44,15 +44,8 @@ from sparse_identification.solvers import hard_threshold_lstsq_solve
 #--> Defines various functions used in this script.
 
 def perturb(X, stdev):
-    def gen():
-        new_X = np.zeros(np.shape(X))
-        for i in range(len(new_X)):
-            (d1, d2, d3, d4) = np.random.normal(0, stdev, 4)
-            new_X[i] = [(X[i][0]+d1), (X[i][1]+d2), (X[i][2]+d3), (X[i][3]+d4)]
-        return new_X
-
-    new_X = gen()
-
+    if stdev == 0: return X, spder(X)
+    new_X = X + np.random.normal(0, stdev, np.shape(X))
     return new_X, spder(new_X)
 
 def Lotka_Volterra(x0, r, a, time, noise=0):
@@ -164,6 +157,7 @@ def SINDy(x0, t, X, dX):
     estimator = sp.sindy(l1=0.01, solver='lstsq')
     estimator.fit(A, b)#, eq=[C, d])
     coeffs = hard_threshold_lstsq_solve(A, b)
+    print(coeffs)
 
     #--> Simulates the identified model.
     Y  = odeint(Identified_Model, x0, t, args=(poly_lib, estimator),mxstep=5000000)
@@ -245,10 +239,11 @@ if __name__ == '__main__':
     #--> Run the Lotka-Volterra system to produce the data to be used in the sparse identification.
     x0 = np.random.rand(4)
     X1, dX1 = Lotka_Volterra(x0, r, a, t)
-    X2, dX2 = perturb(X1, 0.05)
+    print("cat")
+    X2, dX2 = perturb(X1, 0.01)
 
     Y1 = SINDy(x0, t, X1, dX1)
-    Y2 = SINDy(x0, t, X2, dX2)
+    Y2 = SINDy(x0, t, X1, dX1)
 
     #--> Plots the results to compare the dynamics of the identified system against the original one.
     plot_error(t, X1, Y1, X2, Y2)
