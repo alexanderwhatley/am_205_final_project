@@ -193,5 +193,4 @@ def main(time_range):
     plt.savefig('31_c{}'.format(time_range))
     plt.show()
 
-main(5)
-main(20)
+main(200)
