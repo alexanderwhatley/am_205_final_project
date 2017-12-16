@@ -44,10 +44,10 @@ from sparse_identification.utils import derivative
 
 #--> Defines various functions used in this script.
 
-def perturb(X, stdev):
+def perturb(X, stdev, dt):
     if stdev == 0: return X, spder(X)
     new_X = X + np.random.normal(0, stdev, np.shape(X))
-    return new_X, spder(new_X)
+    return new_X, spder(new_X, dt)
 
 def Lotka_Volterra(x0, r, a, time, noise=0):
     def dynamical_system(y,t):
@@ -59,8 +59,9 @@ def Lotka_Volterra(x0, r, a, time, noise=0):
     x = odeint(dynamical_system,x0,time,mxstep=5000000)
     dt = time[1]-time[0]
     xdot = spder(x,dt)
+    if noise == 0: return x, xdot
 
-    return perturb(x, noise)
+    return perturb(x, noise, dt)
 
 def constraints(library):
 
@@ -140,57 +141,57 @@ def Identified_Model(y, t, library, estimator) :
 
     return dy
 
-def main(time_range):
+r = np.array([1, 0.72, 1.53, 1.27])
+a = np.array([[1, 1.09, 1.52, 0], 
+              [0, 1, 0.44, 1.36], 
+              [2.33, 0, 1, 0.47], 
+              [1.21, 0.51, 0.35, 1]])
 
-    #--> Sets the parameters for the Lotka-Volterra system.
-    r = np.array([1, 0.72, 1.53, 1.27])
-    a = np.array([[1, 1.09, 1.52, 0], 
-                [0, 1, 0.44, 1.36], 
-                [2.33, 0, 1, 0.47], 
-                [1.21, 0.51, 0.35, 1]])
+t = np.linspace(0, 100, 100)
+noise_level = np.logspace(-5, -1, 50)
+diff = []
+initials = [[] for _ in range(10)]
+for i in range(10):
+    total = 0
+    while total < 5:
+        x0 = np.random.uniform(0, 1, 4)
+        x_temp, dx_temp = Lotka_Volterra(x0, r, a, t)
+        if np.max(np.abs(x_temp)) > 1 or np.any(np.isnan(x_temp)) or np.all(x_temp == 0):
+            continue
+        total += 1
+        initials[i].append(x0)
 
-    t = np.linspace(0,time_range,50000)
+for noise in noise_level:
+    noise_diff = []
+    print(noise)
+    i = 0
+    while i < 10:
+        x, dx = [], []
+        for x0 in initials[i]:
+            x_temp, dx_temp = Lotka_Volterra(x0, r, a, t, noise)
+            x.append(x_temp)
+            dx.append(dx_temp)
+        
+        x, dx = np.concatenate(x), np.concatenate(dx)
+        library = PolynomialFeatures(degree=2, include_bias=True)
+        Theta = library.fit_transform(x)
+        n_lib = library.n_output_features_
+        A = block_diag(Theta, Theta, Theta, Theta)
+        b = dx.flatten(order='F')
+        shols = sp.sindy(l1=0.01, solver='lstsq')
+        try:
+            shols.fit(A, b)
+        except:
+            continue
+        x_ident = odeint(Identified_Model, x0, t, args=(library, shols))
+        inf_norm = np.max(np.abs(x_ident.T - x_temp.T), axis=1)
+        noise_diff.append(inf_norm)
+        i += 1
+    diff.append(np.mean(noise_diff, axis=0))
 
-    noise_level = np.logspace(-5, -1, 50)
-    diff = []
-    for noise in noise_level:
-        print(noise)
-        noise_diff = []
-        for _ in range(5):
-            total = 0
-            x0 = np.random.rand(4) # Initial condition.
-            x, dx = Lotka_Volterra(x0, r, a, t, noise=noise)
-
-            # ---> Compute the Library of polynomial features.
-            poly_lib = PolynomialFeatures(degree=2, include_bias=True)
-            lib = poly_lib.fit_transform(x)
-            Theta = block_diag(lib, lib, lib, lib)
-            n_lib = poly_lib.n_output_features_
-
-            b = dx.flatten(order='F')
-            A = Theta
-
-            # ---> Specify the user-defined constraints.
-            C, d = constraints(poly_lib)
-
-            # ---> Create a linear regression estimator using sindy and identify the underlying equations.
-            estimator = sp.sindy(l1=0.01, solver='lstsq')
-            estimator.fit(A, b)#, eq=[C, d])
-            coeffs = hard_threshold_lstsq_solve(A, b)
-
-            #--> Simulates the identified model.
-            Y  = odeint(Identified_Model, x0, t, args=(poly_lib, estimator),mxstep=5000000)
-
-            inf_norm = np.max(np.abs(Y.T - x.T), axis=1)
-            noise_diff.append(inf_norm)
-        diff.append(np.mean(noise_diff, axis=0))
-
-
-    plt.plot(np.log10(noise_level), np.log10(diff))
-    plt.title('Infinity Norm between Trajectories - $t \in [0, {}]$'.format(time_range))
-    plt.xlabel('Log(Noise Level)')
-    plt.ylabel('Log(Infinity Norm)')
-    plt.savefig('31_c{}'.format(time_range))
-    plt.show()
-
-main(200)
+plt.plot(np.log10(noise_level), np.log10(diff))
+plt.title('Infinity Norm between Trajectories - $t \in [0, 100]$')
+plt.xlabel('Log(Noise Level)')
+plt.ylabel('Log(Infinity Norm)')
+plt.savefig('31c100.png')
+plt.show()

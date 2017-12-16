@@ -46,17 +46,9 @@ def Lotka_Volterra(x0, r, a, time):
     return x, xdot
 
 def perturb(X, stdev):
-    def gen():
-        new_X = np.zeros(np.shape(X))
-        for i in range(len(new_X)):
-            (d1, d2, d3, d4) = np.random.normal(0, stdev, 4)
-            new_X[i] = [(X[i][0]+d1), (X[i][1]+d2), (X[i][2]+d3), (X[i][3]+d4)]
-        return new_X
-
-    while True:
-        new_X = gen()
-        print(new_X)
-        if np.max(new_X) != 1: return new_X, derivative(X)
+    if stdev == 0: return X, spder(X)
+    new_X = X + np.random.normal(0, stdev, np.shape(X))
+    return new_X, spder(new_X)
 
 r = np.array([1, 0.72, 1.53, 1.27])
 a = np.array([[1, 1.09, 1.52, 0], 
@@ -64,7 +56,7 @@ a = np.array([[1, 1.09, 1.52, 0],
               [2.33, 0, 1, 0.47], 
               [1.21, 0.51, 0.35, 1]])
 
-t = np.linspace(0,200,50000)
+t = np.linspace(0, 100, 100)
 
 trajectories = []
 total = 0
