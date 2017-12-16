@@ -44,215 +44,225 @@ from sparse_identification.solvers import hard_threshold_lstsq_solve
 #--> Defines various functions used in this script.
 
 def perturb(X, stdev):
-    if stdev == 0: return X, spder(X)
-    new_X = X + np.random.normal(0, stdev, np.shape(X))
-    return new_X, spder(new_X)
+	if stdev == 0: return X, spder(X)
+	new_X = X + np.random.normal(0, stdev, np.shape(X))
+	return new_X, spder(new_X)
 
 def Lotka_Volterra(x0, r, a, time, noise=0):
-    def dynamical_system(y,t):
-        dy = np.zeros_like(y)
-        for i in range(4):
-            dy[i] = r[i]*y[i]*(1-a[i][0]*y[0]-a[i][1]*y[1]-a[i][2]*y[2]-a[i][3]*y[3])
-        return dy
+	def dynamical_system(y,t):
+		dy = np.zeros_like(y)
+		for i in range(4):
+			dy[i] = r[i]*y[i]*(1-a[i][0]*y[0]-a[i][1]*y[1]-a[i][2]*y[2]-a[i][3]*y[3])
+		return dy
 
-    x = odeint(dynamical_system,x0,time,mxstep=5000000)
-    dt = time[1]-time[0]
-    xdot = spder(x,dt)
-    if noise == 0: return x, xdot
+	x = odeint(dynamical_system,x0,time,mxstep=5000000)
+	dt = time[1]-time[0]
+	xdot = spder(x,dt)
+	if noise == 0: return x, xdot
 
-    return perturb(x, noise)
+	return perturb(x, noise)
 
 def constraints(library):
 
-    """
+	"""
 
-    This function illustrates how to impose some
-    user-defined constraints for the sparse identification.
+	This function illustrates how to impose some
+	user-defined constraints for the sparse identification.
 
-    Input
-    -----
+	Input
+	-----
 
-    library : library object used for the sparse identification.
+	library : library object used for the sparse identification.
 
-    Outputs
-    -------
+	Outputs
+	-------
 
-    C : two-dimensional numpy array.
-        Constraints to be imposed on the regression coefficients.
+	C : two-dimensional numpy array.
+		Constraints to be imposed on the regression coefficients.
 
-    d : one-dimensional numpy array.
-        Value of the constraints.
+	d : one-dimensional numpy array.
+		Value of the constraints.
 
-    """
+	"""
 
-    #--> Recover the number of input and output features of the library.
-    m = library.n_input_features_
-    n = library.n_output_features_
+	#--> Recover the number of input and output features of the library.
+	m = library.n_input_features_
+	n = library.n_output_features_
 
-    #--> Initialise the user-defined constraints matrix and vector.
-    #    In this example, two different constraints are imposed.
-    C = np.zeros((2, m*n))
-    d = np.zeros((2,1))
+	#--> Initialise the user-defined constraints matrix and vector.
+	#    In this example, two different constraints are imposed.
+	C = np.zeros((2, m*n))
+	d = np.zeros((2,1))
 
-    #--> Definition of the first constraint:
-    #    In the x-equation, one imposes that xi[2] = -xi[1]
-    #    Note: xi[0] corresponds to the bias, xi[1] to the coefficient
-    #    for x(t) and xi[2] to the one for y(t).
-    C[0, 1] = 1
-    C[0, 2] = 1
+	#--> Definition of the first constraint:
+	#    In the x-equation, one imposes that xi[2] = -xi[1]
+	#    Note: xi[0] corresponds to the bias, xi[1] to the coefficient
+	#    for x(t) and xi[2] to the one for y(t).
+	C[0, 1] = 1
+	C[0, 2] = 1
 
-    #--> Definition of the second constraint:
-    #    In the y-equation, one imposes that xi[1] = 28
-    #    Note: the n+ is because the coefficient xi[1] for
-    #    the y-equation is the n+1th entry of the regression
-    #    coefficients vector.
-    C[1, n+1] = 1
-    d[1] = 28
+	#--> Definition of the second constraint:
+	#    In the y-equation, one imposes that xi[1] = 28
+	#    Note: the n+ is because the coefficient xi[1] for
+	#    the y-equation is the n+1th entry of the regression
+	#    coefficients vector.
+	C[1, n+1] = 1
+	d[1] = 28
 
-    return C, d
+	return C, d
 
 def Identified_Model(y, t, library, estimator) :
 
-    '''
-    Simulates the model from Sparse identification.
+	'''
+	Simulates the model from Sparse identification.
 
-    Inputs
-    ------
+	Inputs
+	------
 
-    library: library object used in the sparse identification
-             (e.g. poly_lib = PolynomialFeatures(degree=3) )
+	library: library object used in the sparse identification
+			 (e.g. poly_lib = PolynomialFeatures(degree=3) )
 
-    estimator: estimator object obtained from the sparse identification
+	estimator: estimator object obtained from the sparse identification
 
-    Output
-    ------
+	Output
+	------
 
-    dy : numpy array object containing the derivatives evaluated using the
-         model identified from sparse regression.
+	dy : numpy array object containing the derivatives evaluated using the
+		 model identified from sparse regression.
 
-    '''
+	'''
 
-    dy = np.zeros_like(y)
+	dy = np.zeros_like(y)
 
-    lib = library.fit_transform(y.reshape(1,-1))
-    Theta = block_diag(lib, lib, lib, lib)
-    dy = Theta.dot(estimator.coef_)
+	lib = library.fit_transform(y.reshape(1,-1))
+	Theta = block_diag(lib, lib, lib, lib)
+	dy = Theta.dot(estimator.coef_)
 
-    return dy
+	return dy
 
 def SINDy(x0, t, X, dX):
-    # ---> Compute the Library of polynomial features.
-    poly_lib = PolynomialFeatures(degree=2, include_bias=True)
-    lib = poly_lib.fit_transform(X)
-    Theta = block_diag(lib, lib, lib, lib)
-    n_lib = poly_lib.n_output_features_
+	# ---> Compute the Library of polynomial features.
+	poly_lib = PolynomialFeatures(degree=2, include_bias=True)
+	lib = poly_lib.fit_transform(X)
+	Theta = block_diag(lib, lib, lib, lib)
+	n_lib = poly_lib.n_output_features_
 
-    b = dX.flatten(order='F')
-    A = Theta
+	b = dX.flatten(order='F')
+	A = Theta
 
-    # ---> Specify the user-defined constraints.
-    C, d = constraints(poly_lib)
+	# ---> Specify the user-defined constraints.
+	C, d = constraints(poly_lib)
 
-    # ---> Create a linear regression estimator using sindy and identify the underlying equations.
-    estimator = sp.sindy(l1=0.01, solver='lstsq')
-    estimator.fit(A, b)#, eq=[C, d])
-    coeffs = hard_threshold_lstsq_solve(A, b)
-    print(coeffs)
+	# ---> Create a linear regression estimator using sindy and identify the underlying equations.
+	estimator = sp.sindy(l1=0.01, solver='lstsq')
+	estimator.fit(A, b)#, eq=[C, d])
+	coeffs = hard_threshold_lstsq_solve(A, b)
+	print(coeffs)
 
-    #--> Simulates the identified model.
-    Y  = odeint(Identified_Model, x0, t, args=(poly_lib, estimator),mxstep=5000000)
+	#--> Simulates the identified model.
+	Y  = odeint(Identified_Model, x0, t, args=(poly_lib, estimator),mxstep=5000000)
 
-    return Y
+	return Y
 
 def plot_results_multi(t, X1, Y1, X2, Y2, stdev, time_range):
 
-    """
+	"""
 
-    Function to plot the results. No need to comment.
+	Function to plot the results. No need to comment.
 
-    """
+	"""
 
-    fig, ax = plt.subplots( 4 , 2 , sharex = True, figsize=(20,5) )
-    plt.suptitle('Actual vs. Prediction - $t \in [0, {}], \sigma = {}$'.format(time_range, stdev))
+	fig, ax = plt.subplots( 4 , 2 , sharex = True, figsize=(20,5) )
+	plt.suptitle('Actual vs. Prediction - $t \in [0, {}], \sigma = {}$'.format(time_range, stdev))
 
-    def plot_side(j, X, Y):
-        ax[0][j].plot(t  , X[:,0], color='b', label='Full simulation' )
-        ax[0][j].plot(t , Y[:,0], color='r', linestyle='--', label='Identified model')
-        ax[0][j].set_ylabel('x1(t)')
-        ax[0][j].legend(loc='upper center', bbox_to_anchor=(.5, 1.33), ncol=2, frameon=False )
+	def plot_side(j, X, Y):
+		ax[0][j].plot(t  , X[:,0], color='b', label='Full simulation' )
+		ax[0][j].plot(t , Y[:,0], color='r', linestyle='--', label='Identified model')
+		ax[0][j].set_ylabel('x1(t)')
+		ax[0][j].legend(loc='upper center', bbox_to_anchor=(.5, 1.33), ncol=2, frameon=False )
+		ax[0][j].set_ylim(0, 1)
 
-        ax[1][j].plot(t, X[:,1], color='b')
-        ax[1][j].plot(t ,Y[:,1], color='r', ls='--')
-        ax[1][j].set_ylabel('x2(t)')
+		ax[1][j].plot(t, X[:,1], color='b')
+		ax[1][j].plot(t ,Y[:,1], color='r', ls='--')
+		ax[1][j].set_ylabel('x2(t)')
+		ax[1][j].set_ylim(0, 1)
 
-        ax[2][j].plot(t, X[:,2], color='b')
-        ax[2][j].plot(t ,Y[:,2], color='r', ls='--')
-        ax[2][j].set_ylabel('x3(t)')
+		ax[2][j].plot(t, X[:,2], color='b')
+		ax[2][j].plot(t ,Y[:,2], color='r', ls='--')
+		ax[2][j].set_ylabel('x3(t)')
+		ax[2][j].set_ylim(0, 1)
 
-        ax[3][j].plot(t, X[:,3], color='b')
-        ax[3][j].plot(t ,Y[:,3], color='r', ls='--')
-        ax[3][j].set_ylabel('x4(t)')
-        ax[3][j].set_xlabel('Time')
-        ax[3][j].set_xlim(0, time_range)
+		ax[3][j].plot(t, X[:,3], color='b')
+		ax[3][j].plot(t ,Y[:,3], color='r', ls='--')
+		ax[3][j].set_ylabel('x4(t)')
+		ax[3][j].set_xlabel('Time')
+		ax[3][j].set_xlim(0, time_range)
+		ax[3][j].set_ylim(0, 1)
 
-    plot_side(0, X1, Y1)
-    plot_side(1, X2, Y2)
-    plt.savefig('31e_multi{}.png'.format(stdev))
+	plot_side(0, X1, Y1)
+	plot_side(1, X2, Y2)
+	# plt.savefig('31e_multi{}.png'.format(stdev))
 
-    return
+	return
 
-def plot_error(t, X1, Y1, X2, Y2, stdev, time_range):
-    error1 = np.absolute(Y1-X1)
-    error2 = np.absolute(Y2-X2)
+def plot_error(t, error1, error2, stdev, time_range):
+	fig, ax = plt.subplots( 4 , 2 , sharex = True, figsize=(20,5) )
+	plt.suptitle('Prediction Error - $t \in [0, {}], \sigma = {}$'.format(time_range, stdev))
 
-    fig, ax = plt.subplots( 4 , 2 , sharex = True, figsize=(20,5) )
-    plt.suptitle('Prediction Error - $t \in [0, {}], \sigma = {}$'.format(time_range, stdev))
+	def plot_side(j, Z):
+		ax[0][j].plot(t  , Z[:,0], color='b')
+		ax[0][j].set_ylabel('x1(t) error')
 
-    def plot_side(j, Z):
-        ax[0][j].plot(t  , Z[:,0], color='b')
-        ax[0][j].set_ylabel('x1(t) error')
+		ax[1][j].plot(t, Z[:,1], color='b')
+		ax[1][j].set_ylabel('x2(t) error')
 
-        ax[1][j].plot(t, Z[:,1], color='b')
-        ax[1][j].set_ylabel('x2(t) error')
+		ax[2][j].plot(t, Z[:,2], color='b')
+		ax[2][j].set_ylabel('x3(t)')
 
-        ax[2][j].plot(t, Z[:,2], color='b')
-        ax[2][j].set_ylabel('x3(t)')
+		ax[3][j].plot(t, Z[:,3], color='b')
+		ax[3][j].set_ylabel('x4(t) error')
+		ax[3][j].set_xlabel('Time')
+		ax[3][j].set_xlim(0, time_range)
 
-        ax[3][j].plot(t, Z[:,3], color='b')
-        ax[3][j].set_ylabel('x4(t) error')
-        ax[3][j].set_xlabel('Time')
-        ax[3][j].set_xlim(0, time_range)
+	plot_side(0, error1)
+	plot_side(1, error2)
+	# plt.savefig('31e_error{}.png'.format(stdev))
 
-    plot_side(0, error1)
-    plot_side(1, error2)
-    plt.savefig('31e_error{}.png'.format(stdev))
+	return
 
-    return
+def main(stdev, time_range, plot=True):
+	x0 = np.random.rand(4)
 
-def main(x0, stdev, time_range):
-    #--> Sets the parameters for the Lotka-Volterra system.
-    r = np.array([1, 0.72, 1.53, 1.27])
-    a = np.array([[1, 1.09, 1.52, 0], 
-                  [0, 1, 0.44, 1.36], 
-                  [2.33, 0, 1, 0.47], 
-                  [1.21, 0.51, 0.35, 1]])
+	#--> Sets the parameters for the Lotka-Volterra system.
+	r = np.array([1, 0.72, 1.53, 1.27])
+	a = np.array([[1, 1.09, 1.52, 0], 
+				  [0, 1, 0.44, 1.36], 
+				  [2.33, 0, 1, 0.47], 
+				  [1.21, 0.51, 0.35, 1]])
 
-    t = np.linspace(0,time_range,50000)
+	t = np.linspace(0,time_range,time_range)
 
-    #--> Run the Lotka-Volterra system to produce the data to be used in the sparse identification.
-    X1, dX1 = Lotka_Volterra(x0, r, a, t)
-    X2, dX2 = perturb(X1, stdev)
+	#--> Run the Lotka-Volterra system to produce the data to be used in the sparse identification.
+	X1, dX1 = Lotka_Volterra(x0, r, a, t)
+	X2, dX2 = perturb(X1, stdev)
 
-    Y1 = SINDy(x0, t, X1, dX1)
-    Y2 = SINDy(x0, t, X1, dX1)
+	Y1 = SINDy(x0, t, X1, dX1)
+	Y2 = SINDy(x0, t, X1, dX1)
 
-    #--> Plots the results to compare the dynamics of the identified system against the original one.
-    plot_error(t, X1, Y1, X2, Y2, stdev, time_range)
-    plot_results_multi(t, X1, Y1, X2, Y2, stdev, time_range)
+	error1 = np.absolute(Y1-X1)
+	error2 = np.absolute(Y2-X2)
 
-x0 = np.random.rand(4)
+	if plot: 
+		#--> Plots the results to compare the dynamics of the identified system against the original one.
+		plot_error(t, error1, error2, stdev, time_range)
+		plot_results_multi(t, X1, Y1, X2, Y2, stdev, time_range)
+		plt.show()
 
-main(x0, 0.001, 100)
-main(x0, 0.005, 100)
-main(x0, 0.01, 100)
-main(x0, 0.05, 100)
+	else: return X1, X2, Y1, Y2, error1, error2
+
+# lower the stdev until it works with 100 time steps np.logspace(-10, -4, 50)
+# rate at which the error increases vs. noise
+main(0, 100, plot=False)
+# main(x0, 0.000005, 100)
+# main(x0, 0.00001, 100)
+# main(x0, 0.00005, 100)
