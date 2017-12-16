@@ -164,7 +164,7 @@ def SINDy(x0, t, X, dX):
 
     return Y
 
-def plot_results_multi(t, X1, Y1, X2, Y2):
+def plot_results_multi(t, X1, Y1, X2, Y2, stdev, time_range):
 
     """
 
@@ -173,6 +173,7 @@ def plot_results_multi(t, X1, Y1, X2, Y2):
     """
 
     fig, ax = plt.subplots( 4 , 2 , sharex = True, figsize=(20,5) )
+    plt.suptitle('Actual vs. Prediction - $t \in [0, {}], \sigma = {}$'.format(time_range, stdev))
 
     def plot_side(j, X, Y):
         ax[0][j].plot(t  , X[:,0], color='b', label='Full simulation' )
@@ -192,18 +193,20 @@ def plot_results_multi(t, X1, Y1, X2, Y2):
         ax[3][j].plot(t ,Y[:,3], color='r', ls='--')
         ax[3][j].set_ylabel('x4(t)')
         ax[3][j].set_xlabel('Time')
-        ax[3][j].set_xlim(0, 200)
+        ax[3][j].set_xlim(0, time_range)
 
     plot_side(0, X1, Y1)
     plot_side(1, X2, Y2)
+    plt.savefig('31e_multi{}.png'.format(stdev))
 
     return
 
-def plot_error(t, X1, Y1, X2, Y2):
+def plot_error(t, X1, Y1, X2, Y2, stdev, time_range):
     error1 = np.absolute(Y1-X1)
     error2 = np.absolute(Y2-X2)
 
     fig, ax = plt.subplots( 4 , 2 , sharex = True, figsize=(20,5) )
+    plt.suptitle('Prediction Error - $t \in [0, {}], \sigma = {}$'.format(time_range, stdev))
 
     def plot_side(j, Z):
         ax[0][j].plot(t  , Z[:,0], color='b')
@@ -218,15 +221,15 @@ def plot_error(t, X1, Y1, X2, Y2):
         ax[3][j].plot(t, Z[:,3], color='b')
         ax[3][j].set_ylabel('x4(t) error')
         ax[3][j].set_xlabel('Time')
-        ax[3][j].set_xlim(0, 200)
+        ax[3][j].set_xlim(0, time_range)
 
     plot_side(0, error1)
     plot_side(1, error2)
+    plt.savefig('31e_error{}.png'.format(stdev))
 
     return
 
-if __name__ == '__main__':
-
+def main(x0, stdev, time_range):
     #--> Sets the parameters for the Lotka-Volterra system.
     r = np.array([1, 0.72, 1.53, 1.27])
     a = np.array([[1, 1.09, 1.52, 0], 
@@ -234,19 +237,22 @@ if __name__ == '__main__':
                   [2.33, 0, 1, 0.47], 
                   [1.21, 0.51, 0.35, 1]])
 
-    t = np.linspace(0,200,50000)
+    t = np.linspace(0,time_range,50000)
 
     #--> Run the Lotka-Volterra system to produce the data to be used in the sparse identification.
-    x0 = np.random.rand(4)
     X1, dX1 = Lotka_Volterra(x0, r, a, t)
-    print("cat")
-    X2, dX2 = perturb(X1, 0.01)
+    X2, dX2 = perturb(X1, stdev)
 
     Y1 = SINDy(x0, t, X1, dX1)
     Y2 = SINDy(x0, t, X1, dX1)
 
     #--> Plots the results to compare the dynamics of the identified system against the original one.
-    plot_error(t, X1, Y1, X2, Y2)
-    plot_results_multi(t, X1, Y1, X2, Y2)
+    plot_error(t, X1, Y1, X2, Y2, stdev, time_range)
+    plot_results_multi(t, X1, Y1, X2, Y2, stdev, time_range)
 
-    plt.show()
+x0 = np.random.rand(4)
+
+main(x0, 0.001, 100)
+main(x0, 0.005, 100)
+main(x0, 0.01, 100)
+main(x0, 0.05, 100)
