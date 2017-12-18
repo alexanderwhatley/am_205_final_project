@@ -41,121 +41,8 @@ import sparse_identification as sp
 from sparse_identification.utils import derivative as spder
 from sparse_identification.solvers import hard_threshold_lstsq_solve
 
-#--> Defines various functions used in this script.
-
-def perturb(X, stdev, dt):
-	if stdev == 0: return X, spder(X, dt)
-	new_X = X + np.random.normal(0, stdev, np.shape(X))
-	return new_X, spder(new_X, dt)
-
-def Lotka_Volterra(x0, r, a, time, noise=0):
-
-	"""
-	This small function runs a simulation of the Lotka-Volterra system.
-	Inputs
-	------
-	x0 : numpy array containing the initial condition.
-	alpha, beta: Parameters of Lotka-Volterra system. 
-				 alpha is 1-dimensional, and beta is 
-				 a matrix. 
-	time : numpy array for the evaluation of the state of
-		   the Lotka-Volterra system at some given time instants.
-	Outputs
-	-------
-	x : numpy two-dimensional array.
-		State vector of the vector for the time instants
-		specified in time.
-	xdot : corresponding derivatives evaluated using
-		   central differences.
-	"""
-
-	def dynamical_system(y,t):
-		return (r + a @ y) * y
-
-	x = odeint(dynamical_system,x0,time,mxstep=5000000)
-	dt = time[1]-time[0]
-	xdot = spder(x,dt)
-	if noise == 0: return x, xdot
-
-	return perturb(x, noise, dt)
-
-def constraints(library):
-
-	"""
-
-	This function illustrates how to impose some
-	user-defined constraints for the sparse identification.
-
-	Input
-	-----
-
-	library : library object used for the sparse identification.
-
-	Outputs
-	-------
-
-	C : two-dimensional numpy array.
-		Constraints to be imposed on the regression coefficients.
-
-	d : one-dimensional numpy array.
-		Value of the constraints.
-
-	"""
-
-	#--> Recover the number of input and output features of the library.
-	m = library.n_input_features_
-	n = library.n_output_features_
-
-	#--> Initialise the user-defined constraints matrix and vector.
-	#    In this example, two different constraints are imposed.
-	C = np.zeros((2, m*n))
-	d = np.zeros((2,1))
-
-	#--> Definition of the first constraint:
-	#    In the x-equation, one imposes that xi[2] = -xi[1]
-	#    Note: xi[0] corresponds to the bias, xi[1] to the coefficient
-	#    for x(t) and xi[2] to the one for y(t).
-	C[0, 1] = 1
-	C[0, 2] = 1
-
-	#--> Definition of the second constraint:
-	#    In the y-equation, one imposes that xi[1] = 28
-	#    Note: the n+ is because the coefficient xi[1] for
-	#    the y-equation is the n+1th entry of the regression
-	#    coefficients vector.
-	C[1, n+1] = 1
-	d[1] = 28
-
-	return C, d
-
-def Identified_Model(y, t, library, estimator) :
-
-	'''
-	Simulates the model from Sparse identification.
-
-	Inputs
-	------
-
-	library: library object used in the sparse identification
-			 (e.g. poly_lib = PolynomialFeatures(degree=3) )
-
-	estimator: estimator object obtained from the sparse identification
-
-	Output
-	------
-
-	dy : numpy array object containing the derivatives evaluated using the
-		 model identified from sparse regression.
-
-	'''
-
-	dy = np.zeros_like(y)
-
-	lib = library.fit_transform(y.reshape(1,-1))
-	Theta = block_diag(lib, lib, lib, lib)
-	dy = Theta.dot(estimator.coef_)
-
-	return dy
+#--> Import helper functions in Lotka_Volterra_4Var_Gen.py
+from Lotka_Volterra_4Var_Gen import *
 
 # from sklearn.preprocessing import PolynomialFeatures
 def make_coefficients(r, a, num_terms):
@@ -179,17 +66,7 @@ true_coeffs = make_coefficients(r, a, 15)
 t = np.linspace(0, 100, 2000)
 noise_level = np.logspace(-5, -1, 50)
 dist, sparsity = [], []
-
-initials = [[] for _ in range(10)]
-for i in range(10):
-	total = 0
-	while total < 5:
-		x0 = np.random.uniform(0, 1, 4)
-		x, dx = Lotka_Volterra(x0, r, a, t)
-		if np.max(np.abs(x)) > 1 or np.any(np.isnan(x)) or np.all(x == 0):
-			continue
-		total += 1
-		initials[i].append(x0)
+initials = gen_init(r, a, t)
 
 for noise in noise_level:
 	print(noise)
