@@ -40,11 +40,12 @@ from sklearn.preprocessing import PolynomialFeatures
 import sparse_identification as sp
 from sparse_identification.utils import derivative as spder
 from sparse_identification.solvers import hard_threshold_lstsq_solve
+from sparse_identification.utils import derivative
 
 #--> Defines various functions used in this script.
 
 def perturb(X, stdev, dt):
-	if stdev == 0: return X, spder(X, dt)
+	if stdev == 0: return X, spder(X)
 	new_X = X + np.random.normal(0, stdev, np.shape(X))
 	return new_X, spder(new_X, dt)
 
@@ -157,79 +158,34 @@ def Identified_Model(y, t, library, estimator) :
 
 	return dy
 
-def plot_results_multi(t, X1, Y1, X2, Y2, stdev):
+r = np.array([1, 0.72, 1.53, 1.27])
+a = np.array([[-1, -1.09, -1.52, 0], 
+			  [0, -1*0.72, -0.44*0.72, -1.36*0.72], 
+			  [-2.33*1.53, 0, -1.53, -0.47*1.53], 
+			  [-1.21*1.27, -0.51*1.27, -0.35*1.27, -1.27]])
+noise = 1e-5
+time_steps = np.linspace(1000, 5000, 26)
+diff = []
+initials = [[] for _ in range(10)]
+for i in range(10):
+	total = 0
+	while total < 5:
+		x0 = np.random.uniform(0, 1, 4)
+		x_temp, dx_temp = Lotka_Volterra(x0, r, a, np.linspace(0, 100, 2000))
+		if np.max(np.abs(x_temp)) > 1 or np.any(np.isnan(x_temp)) or np.all(x_temp == 0):
+			continue
+		total += 1
+		initials[i].append(x0)
 
-	"""
-
-	Function to plot the results. No need to comment.
-
-	"""
-
-	fig, ax = plt.subplots( 4 , 2 , sharex = True, figsize=(20,5) )
-	plt.suptitle('Actual vs. Prediction - $t \in [0, {}], \sigma = {}$'.format(100, stdev))
-
-	def plot_side(j, X, Y):
-		ax[0][j].plot(t  , X[:,0], color='b', label='Full simulation' )
-		ax[0][j].plot(t , Y[:,0], color='r', linestyle='--', label='Identified model')
-		ax[0][j].set_ylabel('x1(t)')
-		ax[0][j].legend(loc='upper center', bbox_to_anchor=(.5, 1.33), ncol=2, frameon=False )
-		ax[0][j].set_ylim(0, 1)
-
-		ax[1][j].plot(t, X[:,1], color='b')
-		ax[1][j].plot(t ,Y[:,1], color='r', ls='--')
-		ax[1][j].set_ylabel('x2(t)')
-		ax[1][j].set_ylim(0, 1)
-
-		ax[2][j].plot(t, X[:,2], color='b')
-		ax[2][j].plot(t ,Y[:,2], color='r', ls='--')
-		ax[2][j].set_ylabel('x3(t)')
-		ax[2][j].set_ylim(0, 1)
-
-		ax[3][j].plot(t, X[:,3], color='b')
-		ax[3][j].plot(t ,Y[:,3], color='r', ls='--')
-		ax[3][j].set_ylabel('x4(t)')
-		ax[3][j].set_xlabel('Time')
-		ax[3][j].set_xlim(0, 100)
-		ax[3][j].set_ylim(0, 1)
-
-	plot_side(0, X1, Y1)
-	plot_side(1, X2, Y2)
-	plt.savefig('31c_error1.png')
-
-	return
-
-def plot_error(t, error1, error2, stdev):
-	fig, ax = plt.subplots( 4 , 2 , sharex = True, figsize=(20,5) )
-	plt.suptitle('Prediction Error - $t \in [0, {}], \sigma = {}$'.format(100, stdev))
-
-	def plot_side(j, Z):
-		ax[0][j].plot(t  , Z[:,0], color='b')
-		ax[0][j].set_ylabel('x1(t) error')
-
-		ax[1][j].plot(t, Z[:,1], color='b')
-		ax[1][j].set_ylabel('x2(t) error')
-
-		ax[2][j].plot(t, Z[:,2], color='b')
-		ax[2][j].set_ylabel('x3(t)')
-
-		ax[3][j].plot(t, Z[:,3], color='b')
-		ax[3][j].set_ylabel('x4(t) error')
-		ax[3][j].set_xlabel('Time')
-		ax[3][j].set_xlim(0, 100)
-
-	plot_side(0, error1)
-	plot_side(1, error2)
-	plt.savefig('31c_error2.png')
-
-	return
-
-def SINDy(initials, stdev, r, a, t):
-	noise_diff = []
+for step in time_steps:
+	t = np.linspace(0, 100, step)
+	output_step = []
+	print(step)
 	i = 0
 	while i < 10:
 		x, dx = [], []
 		for x0 in initials[i]:
-			x_temp, dx_temp = Lotka_Volterra(x0, r, a, t, stdev)
+			x_temp, dx_temp = Lotka_Volterra(x0, r, a, t, noise)
 			x.append(x_temp)
 			dx.append(dx_temp)
 		
@@ -246,42 +202,13 @@ def SINDy(initials, stdev, r, a, t):
 			continue
 		x_ident = odeint(Identified_Model, x0, t, args=(library, shols))
 		inf_norm = np.max(np.abs(x_ident.T - x_temp.T), axis=1)
-		noise_diff.append(inf_norm)
+		output_step.append(inf_norm)
 		i += 1
+	diff.append(np.mean(output_step, axis=0))
 
-	return x_temp, x_ident
-
-def main(stdev, plot=True):
-	r = np.array([1, 0.72, 1.53, 1.27])
-	a = np.array([[-1, -1.09, -1.52, 0], 
-				  [0, -1*0.72, -0.44*0.72, -1.36*0.72], 
-				  [-2.33*1.53, 0, -1.53, -0.47*1.53], 
-				  [-1.21*1.27, -0.51*1.27, -0.35*1.27, -1.27]])
-	t = np.linspace(0, 100, 2000)
-	diff = []
-	initials = [[] for _ in range(10)]
-	for i in range(10):
-		total = 0
-		while total < 5:
-			x0 = np.random.uniform(0, 1, 4)
-			x_temp, dx_temp = Lotka_Volterra(x0, r, a, t)
-			if np.max(np.abs(x_temp)) > 1 or np.any(np.isnan(x_temp)) or np.all(x_temp == 0):
-				continue
-			total += 1
-			initials[i].append(x0)
-
-	X1, Y1 = SINDy(initials, 0, r, a, t)
-	X2, Y2 = SINDy(initials, stdev, r, a, t)
-
-	error1 = np.absolute(Y1-X1)
-	error2 = np.absolute(Y2-X2)
-
-	if plot: 
-		#--> Plots the results to compare the dynamics of the identified system against the original one.
-		plot_error(t, error1, error2, stdev)
-		plot_results_multi(t, X1, Y1, X2, Y2, stdev)
-		plt.show()
-
-	else: return X1, X2, Y1, Y2, error1, error2
-
-main(1e-3, plot=True)
+plt.plot(time_steps, np.log10(diff))
+plt.title('Infinity Norm between Trajectories - $t \in [0, 100]$')
+plt.xlabel('Time Steps')
+plt.ylabel('Log(Infinity Norm)')
+plt.savefig('31c_steps1.png')
+plt.show()

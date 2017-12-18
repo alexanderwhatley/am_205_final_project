@@ -157,79 +157,48 @@ def Identified_Model(y, t, library, estimator) :
 
 	return dy
 
-def plot_results_multi(t, X1, Y1, X2, Y2, stdev):
+# from sklearn.preprocessing import PolynomialFeatures
+def make_coefficients(r, a, num_terms):
+	num_vars = 4
+	coeffs = np.zeros((num_vars, num_terms))
+	for i in range(num_vars):
+		coeffs[i, i+1] = r[i]
+	coeffs[0, [5, 6, 7, 8]] = a[0]
+	coeffs[1, [6, 9, 10, 11]] = a[1]
+	coeffs[2, [7, 10, 12, 13]] = a[2]
+	coeffs[3, [8, 11, 13, 14]] = a[3]
+	
+	return coeffs.ravel()
 
-	"""
+r = np.array([1, 0.72, 1.53, 1.27])
+a = np.array([[-1, -1.09, -1.52, 0], 
+			  [0, -1*0.72, -0.44*0.72, -1.36*0.72], 
+			  [-2.33*1.53, 0, -1.53, -0.47*1.53], 
+			  [-1.21*1.27, -0.51*1.27, -0.35*1.27, -1.27]])
+true_coeffs = make_coefficients(r, a, 15)
+t = np.linspace(0, 100, 2000)
+noise_level = np.logspace(-5, -1, 50)
+dist, sparsity = [], []
 
-	Function to plot the results. No need to comment.
+initials = [[] for _ in range(10)]
+for i in range(10):
+	total = 0
+	while total < 5:
+		x0 = np.random.uniform(0, 1, 4)
+		x, dx = Lotka_Volterra(x0, r, a, t)
+		if np.max(np.abs(x)) > 1 or np.any(np.isnan(x)) or np.all(x == 0):
+			continue
+		total += 1
+		initials[i].append(x0)
 
-	"""
-
-	fig, ax = plt.subplots( 4 , 2 , sharex = True, figsize=(20,5) )
-	plt.suptitle('Actual vs. Prediction - $t \in [0, {}], \sigma = {}$'.format(100, stdev))
-
-	def plot_side(j, X, Y):
-		ax[0][j].plot(t  , X[:,0], color='b', label='Full simulation' )
-		ax[0][j].plot(t , Y[:,0], color='r', linestyle='--', label='Identified model')
-		ax[0][j].set_ylabel('x1(t)')
-		ax[0][j].legend(loc='upper center', bbox_to_anchor=(.5, 1.33), ncol=2, frameon=False )
-		ax[0][j].set_ylim(0, 1)
-
-		ax[1][j].plot(t, X[:,1], color='b')
-		ax[1][j].plot(t ,Y[:,1], color='r', ls='--')
-		ax[1][j].set_ylabel('x2(t)')
-		ax[1][j].set_ylim(0, 1)
-
-		ax[2][j].plot(t, X[:,2], color='b')
-		ax[2][j].plot(t ,Y[:,2], color='r', ls='--')
-		ax[2][j].set_ylabel('x3(t)')
-		ax[2][j].set_ylim(0, 1)
-
-		ax[3][j].plot(t, X[:,3], color='b')
-		ax[3][j].plot(t ,Y[:,3], color='r', ls='--')
-		ax[3][j].set_ylabel('x4(t)')
-		ax[3][j].set_xlabel('Time')
-		ax[3][j].set_xlim(0, 100)
-		ax[3][j].set_ylim(0, 1)
-
-	plot_side(0, X1, Y1)
-	plot_side(1, X2, Y2)
-	plt.savefig('31c_error1.png')
-
-	return
-
-def plot_error(t, error1, error2, stdev):
-	fig, ax = plt.subplots( 4 , 2 , sharex = True, figsize=(20,5) )
-	plt.suptitle('Prediction Error - $t \in [0, {}], \sigma = {}$'.format(100, stdev))
-
-	def plot_side(j, Z):
-		ax[0][j].plot(t  , Z[:,0], color='b')
-		ax[0][j].set_ylabel('x1(t) error')
-
-		ax[1][j].plot(t, Z[:,1], color='b')
-		ax[1][j].set_ylabel('x2(t) error')
-
-		ax[2][j].plot(t, Z[:,2], color='b')
-		ax[2][j].set_ylabel('x3(t)')
-
-		ax[3][j].plot(t, Z[:,3], color='b')
-		ax[3][j].set_ylabel('x4(t) error')
-		ax[3][j].set_xlabel('Time')
-		ax[3][j].set_xlim(0, 100)
-
-	plot_side(0, error1)
-	plot_side(1, error2)
-	plt.savefig('31c_error2.png')
-
-	return
-
-def SINDy(initials, stdev, r, a, t):
-	noise_diff = []
+for noise in noise_level:
+	print(noise)
 	i = 0
+	noise_dist, noise_sparsity = [], []
 	while i < 10:
 		x, dx = [], []
 		for x0 in initials[i]:
-			x_temp, dx_temp = Lotka_Volterra(x0, r, a, t, stdev)
+			x_temp, dx_temp = Lotka_Volterra(x0, r, a, t, noise)
 			x.append(x_temp)
 			dx.append(dx_temp)
 		
@@ -244,44 +213,23 @@ def SINDy(initials, stdev, r, a, t):
 			shols.fit(A, b)
 		except:
 			continue
-		x_ident = odeint(Identified_Model, x0, t, args=(library, shols))
-		inf_norm = np.max(np.abs(x_ident.T - x_temp.T), axis=1)
-		noise_diff.append(inf_norm)
+		coefs = shols.coef_
+		noise_dist.append(np.linalg.norm(coefs - true_coeffs, ord=2))
+		num_mismatch = np.sum([coefs[i] != 0 and true_coeffs[i] == 0 
+							   for i in range(len(coefs))])
+		noise_sparsity.append(num_mismatch)
 		i += 1
+	dist.append(np.mean(noise_dist))
+	sparsity.append(np.mean(noise_sparsity))
 
-	return x_temp, x_ident
-
-def main(stdev, plot=True):
-	r = np.array([1, 0.72, 1.53, 1.27])
-	a = np.array([[-1, -1.09, -1.52, 0], 
-				  [0, -1*0.72, -0.44*0.72, -1.36*0.72], 
-				  [-2.33*1.53, 0, -1.53, -0.47*1.53], 
-				  [-1.21*1.27, -0.51*1.27, -0.35*1.27, -1.27]])
-	t = np.linspace(0, 100, 2000)
-	diff = []
-	initials = [[] for _ in range(10)]
-	for i in range(10):
-		total = 0
-		while total < 5:
-			x0 = np.random.uniform(0, 1, 4)
-			x_temp, dx_temp = Lotka_Volterra(x0, r, a, t)
-			if np.max(np.abs(x_temp)) > 1 or np.any(np.isnan(x_temp)) or np.all(x_temp == 0):
-				continue
-			total += 1
-			initials[i].append(x0)
-
-	X1, Y1 = SINDy(initials, 0, r, a, t)
-	X2, Y2 = SINDy(initials, stdev, r, a, t)
-
-	error1 = np.absolute(Y1-X1)
-	error2 = np.absolute(Y2-X2)
-
-	if plot: 
-		#--> Plots the results to compare the dynamics of the identified system against the original one.
-		plot_error(t, error1, error2, stdev)
-		plot_results_multi(t, X1, Y1, X2, Y2, stdev)
-		plt.show()
-
-	else: return X1, X2, Y1, Y2, error1, error2
-
-main(1e-3, plot=True)
+fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+ax[0].plot(np.log10(noise_level), dist)
+ax[0].set_title('Distance Between Coefficients')
+ax[0].set_xlabel('Log(Noise Level)')
+ax[0].set_ylabel('Distance')
+ax[1].plot(np.log10(noise_level), sparsity)
+ax[1].set_title('Number of Mismatched Coefficients')
+ax[1].set_xlabel('Log(Noise Level)')
+ax[1].set_ylabel('# Mismatched Coefficients')
+plt.savefig('31c_coeffs.png')
+plt.show()
