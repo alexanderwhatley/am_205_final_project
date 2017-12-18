@@ -7,14 +7,9 @@
 
 """
 
-This small example illustrates the identification of a nonlinear
-dynamical system using the data-driven approach SINDy with constraints
-by Loiseau & Brunton (submitted to JFM Rapids).
-
-Note: The sklearn python package is required for this example.
-----
-
-Contact: loiseau@mech.kth.se
+This file calculates the infinity norm between trajectories as a 
+function of the number of time steps used for t \in [0, 100], from
+1000 to 5000.
 
 """
 
@@ -45,6 +40,7 @@ from sparse_identification.utils import derivative
 #--> Import helper functions in Lotka_Volterra_4Var_Gen.py
 from Lotka_Volterra_4Var_Gen import *
 
+#--> Initializes variables and generates initial conditions.
 r = np.array([1, 0.72, 1.53, 1.27])
 a = np.array([[-1, -1.09, -1.52, 0], 
 			  [0, -1*0.72, -0.44*0.72, -1.36*0.72], 
@@ -55,11 +51,14 @@ time_steps = np.linspace(1000, 5000, 26)
 diff = []
 initials = gen_init(r, a, np.linspace(0, 100, 2000))
 
+#--> Computes average infinity norm between trajectories for 
+#	 each number of time steps.
 for step in time_steps:
 	t = np.linspace(0, 100, step)
 	print(step)
-	diff.append(np.mean(traj(initials, r, a, t, noise), axis=0))
+	diff.append(np.mean(model(initials, r, a, t, noise), axis=0))
 
+#--> Plots average infinity norm as a function of number of time steps.
 plt.plot(time_steps, np.log10(diff))
 plt.title('Infinity Norm between Trajectories - $t \in [0, 100]$')
 plt.xlabel('Time Steps')

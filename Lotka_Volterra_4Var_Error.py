@@ -7,14 +7,8 @@
 
 """
 
-This small example illustrates the identification of a nonlinear
-dynamical system using the data-driven approach SINDy with constraints
-by Loiseau & Brunton (submitted to JFM Rapids).
-
-Note: The sklearn python package is required for this example.
-----
-
-Contact: loiseau@mech.kth.se
+This file provides a simple example and depiction of the SINDy algorithm
+on a perturbed trajectory. The noise level used is 1e-3.
 
 """
 
@@ -44,16 +38,28 @@ from sparse_identification.solvers import hard_threshold_lstsq_solve
 #--> Import helper functions in Lotka_Volterra_4Var_Gen.py
 from Lotka_Volterra_4Var_Gen import *
 
-def plot_results_multi(t, X1, Y1, X2, Y2, stdev):
+def plot_results_multi(t, X1, Y1, X2, Y2, noise):
 
 	"""
 
-	Function to plot the results. No need to comment.
+	Function to plot unperturbed and perturbed trajectories.
+
+	Inputs
+	------
+
+	t : numpy array for the evaluation of the state of
+		the Lotka-Volterra system at some given time instants.
+	X1 : unperturbed true trajectory.
+	Y1 : unperturbed identified trajectory.
+	X2 : perturbed true trajectory.
+	Y2 : perturbed identified trajectory.
+	noise : float representing the standard deviation at which 
+			the trajectory was perturbed.
 
 	"""
 
-	fig, ax = plt.subplots( 4 , 2 , sharex = True, figsize=(20,5) )
-	plt.suptitle('Actual vs. Prediction - $t \in [0, {}], \sigma = {}$'.format(100, stdev))
+	fig, ax = plt.subplots( 4 , 2 , sharex = True, figsize=(10,5) )
+	plt.suptitle('Actual vs. Prediction - $t \in [0, {}], \sigma = {}$'.format(100, noise))
 
 	def plot_side(j, X, Y):
 		ax[0][j].plot(t  , X[:,0], color='b', label='Full simulation' )
@@ -85,9 +91,27 @@ def plot_results_multi(t, X1, Y1, X2, Y2, stdev):
 
 	return
 
-def plot_error(t, error1, error2, stdev):
-	fig, ax = plt.subplots( 4 , 2 , sharex = True, figsize=(20,5) )
-	plt.suptitle('Prediction Error - $t \in [0, {}], \sigma = {}$'.format(100, stdev))
+def plot_error(t, error1, error2, noise):
+
+	"""
+
+	Function to plot error between true and identified 
+	trajectories for perturbed and unperturbed trajectories.
+
+	Inputs
+	------
+
+	t : numpy array for the evaluation of the state of
+		the Lotka-Volterra system at some given time instants.
+	error1 : error between unperturbed true and identified trajectories.
+	error2 : error between perturbed true and identified trajectories.
+	noise : float representing the standard deviation at which 
+			the trajectory was perturbed.
+
+	"""
+
+	fig, ax = plt.subplots( 4 , 2 , sharex = True, figsize=(10,5) )
+	plt.suptitle('Prediction Error - $t \in [0, {}], \sigma = {}$'.format(100, noise))
 
 	def plot_side(j, Z):
 		ax[0][j].plot(t  , Z[:,0], color='b')
@@ -110,7 +134,26 @@ def plot_error(t, error1, error2, stdev):
 
 	return
 
-def main(stdev, plot=True):
+def main(noise):
+
+	"""
+
+	Function to plot error between true and identified 
+	trajectories for perturbed and unperturbed trajectories.
+
+	Inputs
+	------
+
+	t : numpy array for the evaluation of the state of
+		the Lotka-Volterra system at some given time instants.
+	error1 : error between unperturbed true and identified trajectories.
+	error2 : error between perturbed true and identified trajectories.
+	noise : float representing the standard deviation at which 
+			the trajectory was perturbed.
+
+	"""
+
+	#--> Initializes variables and generates initial conditions.
 	r = np.array([1, 0.72, 1.53, 1.27])
 	a = np.array([[-1, -1.09, -1.52, 0], 
 				  [0, -1*0.72, -0.44*0.72, -1.36*0.72], 
@@ -120,18 +163,18 @@ def main(stdev, plot=True):
 	diff = []
 	initials = gen_init(r, a, t)
 
-	X1, Y1 = traj(initials, r, a, t, 0, ret=True)
-	X2, Y2 = traj(initials, r, a, t, stdev, ret=True)
+	#--> Calculates identified trajectory for unperturbed and 
+	#	 perturbed trajectories.
+	X1, Y1 = model(initials, r, a, t, 0, error=True)
+	X2, Y2 = model(initials, r, a, t, noise, error=True)
 
+	#--> Calculates error between true and identified trajectories.
 	error1 = np.absolute(Y1-X1)
 	error2 = np.absolute(Y2-X2)
 
-	if plot: 
-		#--> Plots the results to compare the dynamics of the identified system against the original one.
-		plot_error(t, error1, error2, stdev)
-		plot_results_multi(t, X1, Y1, X2, Y2, stdev)
-		plt.show()
+	#--> Plots the error and trajectories obtained above.
+	plot_error(t, error1, error2, noise)
+	plot_results_multi(t, X1, Y1, X2, Y2, noise)
+	plt.show()
 
-	else: return X1, X2, Y1, Y2, error1, error2
-
-main(1e-3, plot=True)
+main(1e-3)

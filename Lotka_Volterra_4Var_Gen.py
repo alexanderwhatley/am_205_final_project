@@ -1,3 +1,20 @@
+#######################################################################
+#####                                                             #####
+#####     SPARSE IDENTIFICATION OF NONLINEAR DYNAMICS (SINDy)     #####
+#####     Application to the Lotka-Volterra system                #####
+#####                                                             #####
+#######################################################################
+
+"""
+
+This file contains various general functions used in the following files:
+Lotka_Volterra_4Var_Coeffs.py
+Lotka_Volterra_4Var_Trials.py
+Lotka_Volterra_4Var_Error.py
+Lotka_Volterra_4Var_Steps.py
+
+"""
+
 #--> Import standard python libraries
 from math import *
 import numpy as np
@@ -20,23 +37,47 @@ import sparse_identification as sp
 from sparse_identification.utils import derivative as spder
 from sparse_identification.solvers import hard_threshold_lstsq_solve
 
-def perturb(X, stdev, dt):
-	if stdev == 0: return X, spder(X, dt)
-	new_X = X + np.random.normal(0, stdev, np.shape(X))
+def perturb(X, noise, dt):
+
+	"""
+	This small function perturbs the input trajectory.
+
+	Inputs
+	------
+	X : numpy two-dimensional array representing trajectory. 
+	noise : float representing the standard deviation at which the 
+			trajectory is to be perturbed.
+	dt : float representing size fo time step.
+
+	Outputs
+	-------
+	x : numpy two-dimensional array.
+		State vector of the vector for the time instants
+		specified in time.
+	xdot : corresponding derivatives evaluated using
+		   central differences.
+	"""
+
+	if noise == 0: return X, spder(X, dt)
+	new_X = X + np.random.normal(0, noise, np.shape(X))
 	return new_X, spder(new_X, dt)
 
 def Lotka_Volterra(x0, r, a, time, noise=0):
 
 	"""
 	This small function runs a simulation of the Lotka-Volterra system.
+
 	Inputs
 	------
 	x0 : numpy array containing the initial condition.
-	alpha, beta: Parameters of Lotka-Volterra system. 
-				 alpha is 1-dimensional, and beta is 
-				 a matrix. 
+	r, a : parameters of Lotka-Volterra system. 
+		   alpha is 1-dimensional, and beta is 
+		   a matrix. 
 	time : numpy array for the evaluation of the state of
 		   the Lotka-Volterra system at some given time instants.
+	noise : float representing the standard deviation at which the 
+			trajectory is to be perturbed.
+
 	Outputs
 	-------
 	x : numpy two-dimensional array.
@@ -135,6 +176,25 @@ def Identified_Model(y, t, library, estimator) :
 	return dy
 
 def gen_init(r, a, t):
+
+	"""
+	This function generates ten initial conditions for which the 
+	calculated trajectory is stable.
+
+	Inputs
+	------
+	r, a : parameters of Lotka-Volterra system. 
+		   alpha is 1-dimensional, and beta is 
+		   a matrix. 
+	t : numpy array for the evaluation of the state of
+		the Lotka-Volterra system at some given time instants.
+
+	Output
+	------
+	initials: list of ten initial conditions.
+
+	"""
+
 	initials = [[] for _ in range(10)]
 	for i in range(10):
 		total = 0
@@ -147,16 +207,48 @@ def gen_init(r, a, t):
 			initials[i].append(x0)
 	return initials
 
-def traj(initials, r, a, t, noise, ret=False):
+def model(initials, r, a, t, noise, error=False, coeffs=False):
+
+	"""
+	This function calculates the identified model using the SINDy algorithm.
+
+	Inputs
+	------
+	initials: list of ten initial conditions as calculated by 
+			  the gen_init function.
+	r, a : parameters of Lotka-Volterra system. 
+		   alpha is 1-dimensional, and beta is 
+		   a matrix. 
+	t : numpy array for the evaluation of the state of
+		the Lotka-Volterra system at some given time instants.
+	noise : float representing the standard deviation at which the 
+			trajectory is to be perturbed.
+	error : an optional argument returning both the original and 
+			identified model trajectories for error calculations 
+			in the file Lotka_Volterra_Error.py. 
+
+	Outputs
+	-------
+	x_temp, x_ident : original and inferred trajectories if error.
+	lst : list of infinity norms between trajectories if 
+		  not error.
+
+	"""
+
 	lst = []
 	i = 0
 	while i < 10:
 		x, dx = [], []
+
+		#--> Calculates trajectories simulated by the Lotka-Volterra system
+		#	 for each initial condition.
 		for x0 in initials[i]:
 			x_temp, dx_temp = Lotka_Volterra(x0, r, a, t, noise)
 			x.append(x_temp)
 			dx.append(dx_temp)
 		
+		#--> Performs the SINDy algorithm on concatenated trajectories and 
+		#	 calculates infinity norm between trajectories.
 		x, dx = np.concatenate(x), np.concatenate(dx)
 		library = PolynomialFeatures(degree=2, include_bias=True)
 		Theta = library.fit_transform(x)
@@ -168,10 +260,15 @@ def traj(initials, r, a, t, noise, ret=False):
 			shols.fit(A, b)
 		except:
 			continue
-		x_ident = odeint(Identified_Model, x0, t, args=(library, shols))
-		inf_norm = np.max(np.abs(x_ident.T - x_temp.T), axis=1)
-		lst.append(inf_norm)
+
+		if coeffs: 
+			lst.append(shols.coef_)
+		else:
+			x_ident = odeint(Identified_Model, x0, t, args=(library, shols))
+			inf_norm = np.max(np.abs(x_ident.T - x_temp.T), axis=1)
+			lst.append(inf_norm)
+
 		i += 1
 
-	if ret: return x_temp, x_ident
+	if error: return x_temp, x_ident
 	return lst
