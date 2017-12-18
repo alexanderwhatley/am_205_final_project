@@ -97,7 +97,7 @@ def plot_error(t, error1, error2, stdev):
 		ax[1][j].set_ylabel('x2(t) error')
 
 		ax[2][j].plot(t, Z[:,2], color='b')
-		ax[2][j].set_ylabel('x3(t)')
+		ax[2][j].set_ylabel('x3(t) error')
 
 		ax[3][j].plot(t, Z[:,3], color='b')
 		ax[3][j].set_ylabel('x4(t) error')
